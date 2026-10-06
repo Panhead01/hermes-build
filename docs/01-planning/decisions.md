@@ -1,5 +1,10 @@
 # Decisions log (newest first)
 
+## 2026-10-06: Memory-harness testing ground; Claude orchestrates a local model; Notion and Obsidian set aside
+- **Context:** Boss redirected the build after reviewing his Claude artifacts on agent design.
+- **Decision:** Hindsight is the first memory harness; Claude Code is orchestrator and judge; a small local model on the GTX 1080 does routine work; Notion and Obsidian are set aside for Hermes. Version 1 compares harnesses (none, plain files, Hindsight, Hermes's own) on one fixed set of tasks (T011).
+- **Reason:** the goal is to learn which memory approach earns its place before spending on hardware. Claude Code, not claude.ai chat, because it can reach home-network services without exposing them.
+
 ## 2026-10-06: Trial first, on the workstation's GTX 1080, before spending on AI hardware
 - **Context:** Boss wants to see whether Hermes with a memory layer (Hindsight) is worth investing in.
 - **Decision:** run a trial in an isolated guest using the GTX 1080 (8 GB), a small local model, then Hindsight; judge it with a scorecard (tasks T005 to T010).
