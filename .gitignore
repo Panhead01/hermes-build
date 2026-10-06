@@ -1,0 +1,17 @@
+# secrets and private material: never commit these
+.env
+.env.*
+*.key
+*.pem
+*token*
+*secret*
+*.tar
+*.tar.gz
+*.log
+
+# local and editor files
+CLAUDE.local.md
+.obsidian/workspace*.json
+.obsidian/cache
+.DS_Store
+*.swp
