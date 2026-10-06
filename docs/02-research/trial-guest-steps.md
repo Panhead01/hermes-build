@@ -1,29 +1,30 @@
-# Trial guest: steps (draft, 7 Oct 2026)
+# Trial guest: steps (draft, updated 7 Oct 2026)
 
 Goal: a new guest on the workstation with the GTX 1080 passed through, running one small model, measured. Boss runs every Proxmox step; Alice works inside the guest once it exists. Anything marked UNSURE is to be checked against the current Proxmox documentation before running.
 
-## Stage 1: read-only look (nothing changes)
-Run in the Proxmox web page, node `pve`, Shell. Type the commands rather than pasting (pasting into that window adds stray characters). Send back the output or a screenshot.
-1. `lspci -nn | grep -i -E "vga|3d|nvidia"` : finds the GPU and its PCI address (for example `01:00.0`) and the audio function beside it (`01:00.1`).
-2. `lspci -nnk | grep -i -A3 nvidia` : which driver, if any, currently has it.
-3. `dmesg | grep -i -E "iommu|dmar" | head -20` : whether the IOMMU (VT-d) is on.
-4. `cat /proc/cmdline` : the boot options now in use.
-5. IOMMU groups: `for g in $(find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | sort -V); do echo "IOMMU Group ${g##*/}:"; for d in $g/devices/*; do echo -e "\t$(lspci -nns ${d##*/})"; done; done` : the GPU should sit in a group with only its own audio function (and perhaps a PCIe bridge). If it shares a group with other devices, stop and tell Alice.
-6. `lspci | grep -i -E "sata|ahci"` : confirms which controller already goes to the TrueNAS VM, so the GPU change cannot touch it.
+## Stage 1: read-only look (DONE 7 Oct 2026)
+Run by Boss in the Proxmox shell (node `pve`). Results, all OBSERVED on screen:
+- **GPU:** NVIDIA GP104 GeForce GTX 1080 `[10de:1b80]` at `02:00.0`, its audio function `[10de:10f0]` at `02:00.1`. Also seen: an Intel device at `80:14.5` and the management controller's ASPEED graphics at `86:00.0` (not relevant).
+- **Host driver now:** `nouveau` on the GPU, `snd_hda_intel` on the audio function. The host is using the card until a VM claims it.
+- **IOMMU:** on. The log shows the VT-d tables loaded, interrupt remapping enabled, and devices assigned to IOMMU groups.
+- **IOMMU groups:** `02:00.0` and `02:00.1` are alone in their group (nothing else in it). The SATA controller `80:17.0` (the one the TrueNAS VM uses) is alone in its own group, at an unrelated address.
+- **Boot options:** `initrd=\EFI\proxmox\7.0.14-20-pve\initrd.img-7.0.14-20-pve root=ZFS=rpool/ROOT/pve-1 boot=zfs`. Plain ZFS with systemd-boot, no passthrough options. If a boot option is ever needed, it goes in `/etc/kernel/cmdline`, not GRUB.
 
-## Stage 2: decide (Alice reads the output first)
-- GPU in a clean group, IOMMU on: go on to stage 3.
-- IOMMU off: BIOS VT-d and a kernel option are needed first (UNSURE: check the Proxmox PCI passthrough page for the current option on kernel 7.0).
-- GPU not listed: it is not detected; check seating and power before anything else.
+## Stage 2: decision (7 Oct 2026)
+GPU in a clean group, IOMMU on, NAS controller unaffected: go on to stage 3. Host driver changes (stage 4) are tried only if the first VM start fails.
 
 ## Stage 3: the guest (Boss, Proxmox web page)
-- New VM, machine type q35, UEFI (OVMF), Debian 13 server image, 8 cores, 16 GB RAM, 60 GB disk on local-zfs, VirtIO network, start at boot off for now.
-- Add the GPU (and its audio function) as a PCI device, "All Functions", PCI-Express ticked; do not make it the primary display.
-- SSH key for Alice pasted at install (Alice supplies a key pair for this guest only).
-- A snapshot before the first driver install so the guest can be put back.
+1. **Install image.** Node `pve`, storage `local`, ISO Images, Download from URL: `https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7.0-amd64-netinst.iso`, checksum algorithm SHA-256, value `a7ef94ac2fb9a7fec454552abd629b7cc9d5155c886165a45649f5ce6167e355` (read from Debian's SHA256SUMS on 7 Oct 2026).
+2. **Create VM.** General: ID `212`, name `agent-trial`. OS: that ISO, type Linux. System: machine `q35`, BIOS OVMF (UEFI), Add EFI Disk, Pre-Enroll keys unticked (so Secure Boot does not block the NVIDIA driver), SCSI controller VirtIO SCSI single, Qemu Agent ticked. Disks: 60 GiB on `local-zfs`, Discard ticked. CPU: 1 socket, 8 cores, type `host`. Memory: 16384 MiB, Ballooning unticked (passthrough needs it off). Network: bridge `vmbr0`, VirtIO, firewall off for now. Do not start after creation.
+3. **Add the GPU.** VM 212, Hardware, Add, PCI Device, Raw Device `0000:02:00`, All Functions and PCI-Express ticked, Primary GPU unticked.
+4. **Install Debian** from the VM Console: no desktop, SSH server ticked, hostname `agent-trial`, a normal user (no root login), passwords typed only by Boss.
+5. **Alice's access.** A key pair for this guest only was generated on the desktop (`~/.config/alice-ssh/id_ed25519_agenttrial`, no passphrase); Boss pastes the public half into the user's `authorized_keys`. Router DHCP reservation for the guest, then Alice connects.
+6. **Snapshot** the guest before any driver install.
 
-## Stage 4: host changes (only if stage 1 shows they are needed; Boss decides each one)
-Binding the GPU to the passthrough driver at boot (vfio-pci) and keeping the host from using it. Exact file edits to be written once stage 1 output is in; they are host system changes, each with an undo.
+**Risk, stated plainly:** the host is using the GPU now. The first start with the card attached could rarely hang the host's console or the host itself, which would restart every other guest including the NAS. Do the first start at a quiet moment. If the host stops responding, restart it from the management controller's web page.
+
+## Stage 4: host changes (only if the first start fails; Boss decides each one)
+Likely needs: keep the host off the card (blacklist `nouveau`, bind the GPU to `vfio-pci`) and rebuild the boot image, which needs a planned host reboot. UNSURE whether Proxmox's own start-up binding is enough without that; try the plain start first. Exact edits to be written only if needed, each with an undo.
 
 ## Stage 5: inside the guest (Alice, over SSH)
 - NVIDIA driver (a version that still supports Pascal; UNSURE which; check first), then `nvidia-smi`.
