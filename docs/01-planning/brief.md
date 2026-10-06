@@ -30,6 +30,15 @@ Rules that apply to every design: each agent gets its own write surface (branch 
 - **Tools and runners wherever possible.** Prefer fixed, deterministic tools and named runner jobs over the model improvising commands. The model's job is to turn a loose request into a named job from an allowlist; the runner executes the exact command and returns raw output untouched. Background: `~/alice/runner-build-plan-2026-10-04.md` on Boss's desktop (a draft, never built). See task T012.
 - **Costs to accept:** the model holds about 5 to 6 GB of the GTX 1080's 8 GB around the clock, so the GPU is not free for other work; and a small model's mistakes happen unattended, so first jobs are ones where a wrong answer is harmless.
 
+## Target design for tools and the Proxmox tool (adopted 7 Oct 2026)
+Destination, not first step. From the revised "Workstation Agent Map" (claude.ai artifact 01c14556-8898-47b6-ae11-e2dfd753cf73, revised after review on 6 Oct 2026; the earlier version is artifact 1Da1pA8f62kUWFZba1GLrv). Key points: a **gatekeeper guest outside the agents pool** that holds every tool and every key; **approval taken outside the agent's chat** (a page or terminal on the gatekeeper, one-time code); **one gate per action**; **two tokens on a dedicated Proxmox user** (read-only auditor role, and a narrow write role of `VM.Audit`, `VM.PowerMgmt`, `VM.Snapshot`, `VM.Snapshot.Rollback`) scoped to an `agents` pool that holds the trial guest only; a **firewall on the trial guest**; **logs copied off the guest**; workstation status from a **file pushed by the host**; tier 3 (host, storage, other guests, the gatekeeper, firewall, users, backups) never reachable by any agent token. The permission names were checked by Alice against Proxmox's User Management page on 7 Oct 2026 (tokens are privilege-separated by default; pool permissions inherit; `VM.Snapshot` is create and delete; tokens support expiry); nothing has been created or tested.
+
+**Alice's two notes on that design**
+1. Keep Hermes's own approval prompts on for anything it does inside its own guest (commands, file writes). Only actions that go through the gate skip them, because the gate does not cover local actions.
+2. The host-pushed status file means a scheduled root job on the Proxmox host. That is a host change and Boss decides it deliberately.
+
+Still open from the map: where the local model lives (the gatekeeper would call into the trial guest), whether the Gitea connector belongs in the gatekeeper, whether Claude Code treats Hindsight as untrusted input, and whether a snapshot rollback should wipe the agent's memory.
+
 ## The learning loop (from Alice Target Map)
 Every job: brief (goal, what done looks like, known dead ends, when to stop) -> work -> check (code first, then an independent read) -> deliver and react -> record a lesson. Memory sits in the middle, with evidence levels: **hint** (seen once), **pattern** (2 to 3), **rule** (4 or more, or Boss said so), and a fresh observation can overturn a rule. Blocking signals (stall after two attempts, a large surprise, out of scope, safety floor) go to a step-back, not to a third variation.
 

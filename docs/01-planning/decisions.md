@@ -1,5 +1,10 @@
 # Decisions log (newest first)
 
+## 2026-10-07: Revised Workstation Agent Map adopted as the target design; kick off with the engine
+- **Context:** Boss reviewed the revised map from another chat and asked for it to be recorded and the build started.
+- **Decision:** the revised map is the destination for tools and the Proxmox tool (brief, section "Target design"), with Alice's two notes. The first build step stays small: a trial guest with the GTX 1080 and one local model, measured; no gatekeeper, Hermes or Hindsight yet.
+- **Reason:** the engine is the biggest unknown (GPU passthrough, Pascal support, real speed) and is fully reversible. Boss runs the Proxmox steps; Alice writes them and does everything inside the guest.
+
 ## 2026-10-06: Hermes is the always-on layer; approval gates; tools and runners
 - **Context:** the unattended-Claude question (subscription limits and terms) made an always-on Claude bot uncertain, and Boss put the phone link on hold.
 - **Decision:** the always-on assistant is Hermes with a local model, so nothing unattended touches the Claude subscription. Claude is used interactively by Boss, or by Hermes only through a capped API key. Approval gates always apply. Deterministic tools and allowlisted runner jobs are preferred to model improvisation.

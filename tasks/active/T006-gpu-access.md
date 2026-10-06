@@ -18,4 +18,6 @@ The trial guest can run models on the GTX 1080.
 - [ ] A simple GPU test passes (for example `nvidia-smi` and a short model run)
 
 ## Notes
+First step started 7 Oct 2026: the read-only check in `docs/02-research/trial-guest-steps.md` (stage 1). Boss runs it and returns the output.
+
 Check current NVIDIA driver and CUDA support for Pascal before choosing versions. BIOS Internal Graphics is currently disabled.
