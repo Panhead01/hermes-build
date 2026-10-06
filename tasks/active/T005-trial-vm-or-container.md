@@ -18,4 +18,6 @@ A new, isolated guest on the workstation for the Hermes trial.
 - [ ] Home network only, no port forwards
 
 ## Notes
+7 Oct 2026: decided a VM (ID 212, `agent-trial`), with GPU passthrough. Settings in `docs/02-research/trial-guest-steps.md`, stage 3. Boss creates it; Alice then works over SSH.
+
 Alice does not touch Proxmox without Boss's explicit go-ahead for each change.
