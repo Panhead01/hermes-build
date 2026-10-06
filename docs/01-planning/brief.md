@@ -23,6 +23,13 @@ gate outside the agent: manual approval, tests, read-only reviewer, round caps
 Designs used from Agent Designs: **router** (a small model sorts requests), **orchestrator with workers** (Claude leads, the local model works), **maker and checker** (local maker, Claude or a read-only checker, round cap 2), **memory harness** (borrow the ideas of Hermes and OpenClaw), **graph with checkpoints** for long builds. Skipped: swarms.
 Rules that apply to every design: each agent gets its own write surface (branch or worktree); the gate sits outside the agent (Hermes manual approval mode, not its "smart" mode, which was shown injectable); durable checkpoints in files and git; a log of what actually ran that the agent cannot edit; a failure ledger.
 
+## Operating principles (Boss, 6 Oct 2026)
+- **Hermes with the local model is the always-on layer.** Scheduled checks, tagging, sorting and watching run there at no per-token cost and with no dependence on Boss's Claude subscription. Nothing unattended uses that subscription.
+- **Claude is interactive, or an API-key helper.** Boss uses Claude Code himself when he is present. If Hermes calls Claude, it does so with an API key (pay-per-use, spend capped), never by copying subscription logins.
+- **Approval gates regardless.** Any command, write or change outside the guest needs Boss's approval, enforced in code by Hermes's manual approval mode, not by the model's promise. Always-on jobs start read-only or low-risk, and what they ran is logged where the agent cannot edit it.
+- **Tools and runners wherever possible.** Prefer fixed, deterministic tools and named runner jobs over the model improvising commands. The model's job is to turn a loose request into a named job from an allowlist; the runner executes the exact command and returns raw output untouched. Background: `~/alice/runner-build-plan-2026-10-04.md` on Boss's desktop (a draft, never built). See task T012.
+- **Costs to accept:** the model holds about 5 to 6 GB of the GTX 1080's 8 GB around the clock, so the GPU is not free for other work; and a small model's mistakes happen unattended, so first jobs are ones where a wrong answer is harmless.
+
 ## The learning loop (from Alice Target Map)
 Every job: brief (goal, what done looks like, known dead ends, when to stop) -> work -> check (code first, then an independent read) -> deliver and react -> record a lesson. Memory sits in the middle, with evidence levels: **hint** (seen once), **pattern** (2 to 3), **rule** (4 or more, or Boss said so), and a fresh observation can overturn a rule. Blocking signals (stall after two attempts, a large surprise, out of scope, safety floor) go to a step-back, not to a third variation.
 

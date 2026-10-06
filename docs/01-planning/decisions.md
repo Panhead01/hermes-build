@@ -1,5 +1,10 @@
 # Decisions log (newest first)
 
+## 2026-10-06: Hermes is the always-on layer; approval gates; tools and runners
+- **Context:** the unattended-Claude question (subscription limits and terms) made an always-on Claude bot uncertain, and Boss put the phone link on hold.
+- **Decision:** the always-on assistant is Hermes with a local model, so nothing unattended touches the Claude subscription. Claude is used interactively by Boss, or by Hermes only through a capped API key. Approval gates always apply. Deterministic tools and allowlisted runner jobs are preferred to model improvisation.
+- **Reason:** no usage-limit or terms risk, low running cost, and a bounded blast radius if the small model errs. Matrix with Synapse and the phone link are tabled for later.
+
 ## 2026-10-06: Memory-harness testing ground; Claude orchestrates a local model; Notion and Obsidian set aside
 - **Context:** Boss redirected the build after reviewing his Claude artifacts on agent design.
 - **Decision:** Hindsight is the first memory harness; Claude Code is orchestrator and judge; a small local model on the GTX 1080 does routine work; Notion and Obsidian are set aside for Hermes. Version 1 compares harnesses (none, plain files, Hindsight, Hermes's own) on one fixed set of tasks (T011).
