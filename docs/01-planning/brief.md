@@ -26,19 +26,6 @@ Rules that apply to every design: each agent gets its own write surface (branch 
 ## The learning loop (from Alice Target Map)
 Every job: brief (goal, what done looks like, known dead ends, when to stop) -> work -> check (code first, then an independent read) -> deliver and react -> record a lesson. Memory sits in the middle, with evidence levels: **hint** (seen once), **pattern** (2 to 3), **rule** (4 or more, or Boss said so), and a fresh observation can overturn a rule. Blocking signals (stall after two attempts, a large surprise, out of scope, safety floor) go to a step-back, not to a third variation.
 
-## Phone link options (UNDECIDED, tabled by Boss 6 Oct 2026)
-How the phone reaches the agent on the workstation while Claude stays the orchestrator. Facts are from Alice's own knowledge, not checked on the day; Boss's earlier rule (30 Sep 2026): self-hosted, nothing routed through a server he does not control.
-
-| Option | Pros | Cons | Fit with his rule |
-|---|---|---|---|
-| **Matrix with Synapse** (own server, Element app, a bot in the guest) | Self-hosted and private; Synapse is the reference server, so every app and bot guide works; full features (rooms, files, voice notes, calls, optional end-to-end encryption); bots are just accounts; the workstation has memory to spare | More setup and upkeep (PostgreSQL, settings, faster updates); Android alerts normally use Google's push service, so staying self-hosted needs an extra service such as ntfy; encrypted bot rooms are fiddly (use an unencrypted bot room on the private tunnel at first); needs an HTTPS address the phone trusts | Yes |
-| **Telegram bot** | Easy and polished; outbound connections only, no inbound ports | Bot chats are not end-to-end encrypted, so Telegram's servers can read everything; routes through a company he does not control | No (his 30 Sep rule); could suit low-sensitivity notes only |
-| **Claude phone app with a remote connector** | Simplest on the phone; Claude stays the orchestrator | Anthropic's servers make the connection, so a public address is needed for the workstation | Conflicts with nothing exposed |
-| **Claude Code Remote Control** | Built in | Routes through a server he does not control | No (ruled out) |
-| **SSH from the phone over WireGuard into Claude Code** | Nothing to build or expose; proves the orchestrator, local model and memory work together; voice via keyboard dictation | Manual and terminal-based, not a chat bot; the WireGuard allowlist must include the guest | Yes (first proof) |
-
-Open: which of these, and when. The SSH proof does not depend on the choice.
-
 ## Orchestrator choice: Claude Code, not claude.ai chat (Alice's recommendation)
 Claude Code runs on the workstation or desktop, can call the local model and Hindsight through MCP, and can be run headless (`claude -p`, subscription, no API key, as Boss accepted earlier). claude.ai chat cannot reach services on the home network without exposing them, which Boss does not want. claude.ai stays the place for design chats and artifacts.
 
