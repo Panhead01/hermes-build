@@ -1,5 +1,10 @@
 # Decisions log (newest first)
 
+## 2026-10-06: Trial first, on the workstation's GTX 1080, before spending on AI hardware
+- **Context:** Boss wants to see whether Hermes with a memory layer (Hindsight) is worth investing in.
+- **Decision:** run a trial in an isolated guest using the GTX 1080 (8 GB), a small local model, then Hindsight; judge it with a scorecard (tasks T005 to T010).
+- **Reason:** cheap and reversible; produces real numbers to guide any hardware purchase. Hindsight is only a candidate: its page does not list Hermes, and telemetry and version are unconfirmed.
+
 ## 2026-10-06: Scaffold the repo from a lean version of the workspace spec
 - **Context:** Boss asked to start the project and checked the structure.
 - **Decision:** use README, CLAUDE.md, docs, tasks, materials, workflows and CHANGELOG; leave out the NAS dataset hierarchy, archive and share layers until needed.
