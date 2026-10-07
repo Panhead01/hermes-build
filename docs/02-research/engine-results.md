@@ -132,9 +132,40 @@ Safety: no Xid errors in the log (0) after the P0 runs. The card's GDDR5X has no
 - Published llama.cpp tables (CONFIRMED by reading the discussion text): GTX 1080 Ti about 62.5 tok/s CUDA and 67.8 Vulkan (Llama 2 7B Q4_0), GTX 1070 Ti 37.8 CUDA and 42.9 Vulkan. No plain GTX 1080 row exists; interpolation (estimate) puts it at roughly 34 to 42 tok/s for qwen3 8B, so our results are in the normal range. Flash attention changes generation by about 1% on Pascal.
 - Other routes to P0 and their risks (agent report; pstated source and the library files on Mimir checked): the `nvidia-pstate` tool can force a state through an unsupported NVIDIA call and is untested on GeForce; `nvidia-settings` with Coolbits and a memory offset needs an X server (X and NVIDIA's Xorg driver are already installed on Mimir); NVML cannot lock memory clocks on Pascal. Memory overclocking can lower speed before showing errors and can corrupt output silently.
 
-## Next steps (agreed order, each reversible, Boss approves)
+## Integrity check at the full memory clock (7 October 2026)
 
-1. Check output integrity at P0 against a stock-clock baseline (llama.cpp perplexity / KL divergence) and a soak run.
-2. Rerun CUDA and Vulkan on different driver versions only if the P0 result still underperforms.
-3. Make Ollama a service so the test setup survives a reboot.
-4. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
+12 prompts, fixed seed, temperature 0, about 180 tokens each, run with the profile file ON (P0, 5005 MHz) and again with it OFF (P2, 4513 MHz): **12 of 12 outputs identical**; no NVIDIA Xid errors. (Short outputs; this is a sanity check, not a proof against rare memory errors.)
+
+## Cool-start run, six mirrored blocks (script `gpu-sequence.py` on Mimir, started 7 Oct 2026 21:40 AEDT)
+
+Method: each block starts only after the idle card is at 42 C or less and four readings 10 minutes apart (30 minutes) are within 1 C; blocks run in mirrored order (A B C C B A) so heat and time drift cancel; each block is one discarded warm-up plus six timed runs (same prompts as before, 300-token cap); Ollama is restarted per block; the profile file is moved aside for the OFF blocks and always put back. Safety stops (never triggered): GPU above 92 C, any new Xid error, nvidia-smi not answering.
+
+| Block | Condition | Start temp | End temp | Memory clock (end) | Generation tok/s | Prompt tok/s |
+|---|---|---|---|---|---|---|
+| 1 | CUDA, profile ON | 37 C | 68 C | 5005 MHz, P0 | 38.48 | 440 |
+| 2 | CUDA, profile OFF | 37 C | 71 C | 4513 MHz, P2 | 33.65 | 440 |
+| 3 | Vulkan | 36 C | 67 C | 5005 MHz, P0 | 40.91 | 161 |
+| 4 | Vulkan | 36 C | 67 C | 5005 MHz, P0 | 40.90 | 162 |
+| 5 | CUDA, profile OFF | 36 C | 71 C | 4513 MHz, P2 | 33.61 | 435 |
+| 6 | CUDA, profile ON | 36 C | 67 C | 5005 MHz, P0 | 38.52 | 443 |
+
+Repeat blocks agree within 0.1 tok/s, so the numbers are reproducible on a cool start. Means: CUDA ON 38.50, CUDA OFF 33.63, Vulkan 40.91 tok/s generation. The profile is worth about +14.5% over CUDA without it (38.50 against 33.63); Vulkan is still about 6% faster than CUDA with the profile at generation, and about 2.7 times slower at reading prompts (161 against about 440 tok/s). Mean clocks while busy: SM about 1767 MHz (ON), 1840 MHz (OFF), 1776 MHz (Vulkan); power about 172 to 181 W (limit 180 W). Card temperatures 45 to 71 C during the six-run blocks.
+
+### Unexplained discrepancy
+
+The earlier CUDA-default baselines on this machine (two sets of six, before persistence mode was turned on) read about 35.7 tok/s; the cool-start OFF blocks read about 33.6. Clocks were similar (P2, 4513 MHz, SM about 1822 MHz then against 1836 to 1844 MHz now), the profile-ON result did not change (about 38.4 then, 38.5 now), and the repeat OFF blocks agree with each other. Between the two, persistence mode was enabled and Ollama was restarted many times; no cause is established (GUESS: persistence mode or a state left over from the first boot). Treat 33.6 as the baseline of the controlled run and 35.7 as unexplained; the +14.5% figure uses the controlled one, the earlier +7% used the other.
+
+## Soak: stopped early by an out-of-memory kill (NOT completed)
+
+The one-hour soak (profile ON, continuous generation) ran about 7 minutes and about 45 generations at a steady 37.7 tok/s, then the script stopped itself on an Ollama HTTP 500. Cause (OBSERVED in the guest's kernel log and Ollama's log): the Linux out-of-memory killer killed the `llama-server` process. The guest has 3.8 GB of RAM and no swap; llama-server held 2.85 GB resident, and Ollama's prompt cache had grown to 69 cached prompts (2.56 GB, configured limit 8192 MiB, larger than the machine's RAM). It was not a GPU fault: 0 Xid errors, temperature never above the 92 C limit.
+
+While it ran, the card settled at 86 to 88 C (mean 86 C over the soak, range 70 to 88 C) with the SM clock down to about 1642 MHz, power about 168 W: over the card's reported 83 C target, under its 96 C slowdown and 99 C shutdown points. So sustained load is hot even though short tests are fine. Long-run stability at the full memory clock is therefore NOT yet proven.
+
+## Next steps (each reversible, Boss approves)
+
+1. Give Mimir more RAM (needs a full Stop and Start by Boss; the API token can set the amount) and/or limit the prompt cache, then rerun the soak only; compare outputs and speed at the end.
+2. Look at cooling (case airflow or fan curve) because sustained load reaches 86 to 88 C; check whether the fan is allowed to ramp.
+3. Investigate the 35.7 against 33.6 baseline difference (toggle persistence mode and rerun one OFF block).
+4. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
+5. Make Ollama a service so the setup survives a reboot.
+6. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
