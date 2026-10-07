@@ -91,6 +91,50 @@ Caveat: more than the backend changed between the two runs (operating system, ke
 - The first boot with the card attached hung on the default BIOS firmware (silent console, one vCPU spinning, no network). Switching to OVMF with an EFI disk fixed it (a single observation).
 - The API token cannot set the BIOS type, name or start-at-boot (one shared Proxmox right, VM.Config.Options), so the BIOS change was made by Boss in the web page.
 
-## Decision pending
+## Why CUDA is slower at generating: the P2 memory clock (7 October 2026)
 
-Boss will turn Mimir into a cloud-init template (card removed, start-at-boot off). Nothing beyond the engine is built yet.
+Control experiment on the same Ubuntu 26.04 / driver 580 machine, same model and script, forcing the Vulkan backend (`OLLAMA_LLM_LIBRARY=vulkan`, `CUDA_VISIBLE_DEVICES=-1`):
+
+| Run (six each) | Generation tok/s | Prompt reading tok/s | Performance state | Memory clock |
+|---|---|---|---|---|
+| CUDA, default | 35.5 to 35.9 (mean about 35.7), repeated twice | about 437 | P2 | 4513 MHz |
+| Vulkan | 40.7 to 41.0 (mean about 40.9) | about 162 | P0 | 5005 MHz |
+
+The card's maximum memory clock is 5005 MHz. CUDA on GeForce cards is held in P2, which lowers the memory clock about 10%, and generation is memory-bandwidth bound. 4513/5005 = 0.90; the observed speed ratio was 0.87, so the clock explains most but not all of the gap.
+
+Other observations (all OBSERVED on Mimir): GPU 99% utilised and at the 180 W power limit (range 90 to 216 W); PCIe gen 3 x16; persistence mode was off (fixed, see below); vCPU is the generic default type without AVX2 (unchanged); no NVIDIA error (Xid) messages. `nvidia-smi --lock-memory-clocks` is refused on this card (probed once, no change made).
+
+## Fix under test: the CudaNoStablePerfLimit application profile
+
+Source (read directly): an NVIDIA collaborator's comment dated 18 December 2025 on https://github.com/NVIDIA/open-gpu-kernel-modules/issues/333 gives a profile named `CudaNoStablePerfLimit` with setting `0x166c5e` set to 0, said to work on all supported drivers including pre-Turing cards. NVIDIA's README (580.126.09) says application profiles are only supported by the GLX implementation and matches `procname` exactly against the executable name; it also documents the `__GL_APPLICATION_PROFILE_LOG=1` debug switch.
+
+File created on Mimir: `/etc/nvidia/nvidia-application-profiles-rc` (did not exist before), rule `procname` = `llama-server` (the name of the process that holds the GPU; Ollama launches it as a child, binary `.../lib/ollama/llama-server`). Settings are the flat form `["0x166c5e", 0]` as in the NVIDIA comment.
+
+| Condition | Performance state | Memory clock | Generation tok/s (six runs) | Prompt tok/s |
+|---|---|---|---|---|
+| Profile ON | P0 | 5005 MHz | 38.1 to 38.6 (mean about 38.4) | about 437 |
+| Profile OFF (control, file moved away, Ollama restarted) | P2 | 4513 MHz | 32.8 to 33.5 | about 417 |
+| Profile restored | (file back in place) | | | |
+
+Result: the profile moves the compute process to P0 at the full 5005 MHz, and removing it returns P2 (CONFIRMED by switching it on, off and on). The debug log printed nothing, so the file parsing was not directly visible; the change in behaviour is the evidence. Speed: about 38.4 tok/s with the profile against about 35.7 earlier without it (roughly +7%); still about 2.5 tok/s under Vulkan's 40.9.
+
+Caveat on the speed numbers: the card warms during a test (about 65 to 78 C over six runs) and speed drifts down slightly during each set; the control set ran on a warm card and read lower than the earlier cool baseline (about 33 against 35.7). Speeds in the table are therefore only roughly comparable between rows; the clock readings are the solid evidence. A fair A/B needs a cooldown between sets.
+
+Safety: no Xid errors in the log (0) after the P0 runs. The card's GDDR5X has no error correction, so output was not yet checked against a stock-clock baseline and no long soak has been run (see next steps).
+
+## Housekeeping done on Mimir
+
+- NVIDIA persistence mode enabled (systemd drop-in `/etc/systemd/system/nvidia-persistenced.service.d/persistence-on.conf`; Ubuntu starts the daemon with `--no-persistence-mode`).
+- Ollama is still started by hand (not a service); it must be restarted after a reboot.
+
+## Research reports behind this (summary, sources checked where marked)
+
+- Published llama.cpp tables (CONFIRMED by reading the discussion text): GTX 1080 Ti about 62.5 tok/s CUDA and 67.8 Vulkan (Llama 2 7B Q4_0), GTX 1070 Ti 37.8 CUDA and 42.9 Vulkan. No plain GTX 1080 row exists; interpolation (estimate) puts it at roughly 34 to 42 tok/s for qwen3 8B, so our results are in the normal range. Flash attention changes generation by about 1% on Pascal.
+- Other routes to P0 and their risks (agent report; pstated source and the library files on Mimir checked): the `nvidia-pstate` tool can force a state through an unsupported NVIDIA call and is untested on GeForce; `nvidia-settings` with Coolbits and a memory offset needs an X server (X and NVIDIA's Xorg driver are already installed on Mimir); NVML cannot lock memory clocks on Pascal. Memory overclocking can lower speed before showing errors and can corrupt output silently.
+
+## Next steps (agreed order, each reversible, Boss approves)
+
+1. Check output integrity at P0 against a stock-clock baseline (llama.cpp perplexity / KL divergence) and a soak run.
+2. Rerun CUDA and Vulkan on different driver versions only if the P0 result still underperforms.
+3. Make Ollama a service so the test setup survives a reboot.
+4. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
