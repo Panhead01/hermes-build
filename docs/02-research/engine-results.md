@@ -161,11 +161,34 @@ The one-hour soak (profile ON, continuous generation) ran about 7 minutes and ab
 
 While it ran, the card settled at 86 to 88 C (mean 86 C over the soak, range 70 to 88 C) with the SM clock down to about 1642 MHz, power about 168 W: over the card's reported 83 C target, under its 96 C slowdown and 99 C shutdown points. So sustained load is hot even though short tests are fine. Long-run stability at the full memory clock is therefore NOT yet proven.
 
+## Soak rerun with 12 GB RAM: completed (7 October 2026, 18:45 to 19:47 UTC)
+
+Mimir's memory was raised from 4 GB to 12 GB (set through the API token; Boss did the Stop and Start), then the soak-only run repeated: a cool start (35 C idle, four readings within 1 C), then one hour of continuous generation with the profile file ON, with the 12 fixed-seed prompts run before and after.
+
+| Measure | Result |
+|---|---|
+| Generations | 517 over 60 minutes |
+| Generation speed | first 10 runs 38.07 tok/s, last 10 runs 37.74 tok/s (about 1% slower after an hour; steady at 37.6 to 37.8 for most of it) |
+| Answer integrity | **12 of 12 identical** before and after (fixed seed, temperature 0) |
+| NVIDIA Xid errors | 0 |
+| Out-of-memory kills | 0 |
+| Guest memory | rose about 350 MB a minute early on (Ollama's prompt cache), reached about 9.6 GB of 11.9 GB and levelled off; no OOM |
+| Peak temperature | 90 C (mean about 86 to 88 C); SM clock settled about 1630 MHz; power about 160 to 175 W; memory clock stayed 5005 MHz, P0 |
+
+Conclusion (CONFIRMED for this one-hour run): CUDA with the CudaNoStablePerfLimit profile held 5005 MHz memory for an hour with no errors and no corrupted output on the 12-prompt check. The 4 GB machine's earlier kill was a RAM shortage, not a GPU fault. Peak 90 C is within 2 C of the script's 92 C stop and 6 C under the card's 96 C slowdown point, so cooling deserves attention.
+
+## Cooling findings (7 October 2026)
+
+- The card is a Gigabyte GV-N1080TTOC-8GD (Turbo OC, blower cooler, 2 slots, one 8-pin; Guru3D launch article confirms the blower and an 8+2 power-phase design). The board is probably not the NVIDIA reference layout (reported, not confirmed on a page), so drop-in aftermarket coolers may not fit; availability is poor (Gelid Icy Vision discontinued; Arctic Accelero and Raijintek Morpheus availability unverified).
+- A logger on Mimir showed the card's own fan curve already at 87% when the card sits at 88 C, so a steeper curve can only add a small amount; cleaning dust and repasting (planned by Boss for the weekend) is likelier to help.
+- Fan control works headless in the guest through NVML as root (CONFIRMED by test: set 35% took effect and was restored to automatic; range 24 to 100%). A fan-curve and monitoring service is prepared (`gpu-fan-curve.py`): automatic below 55 C, then 50% at 55 C, 65% at 65 C, 80% at 72 C, 100% at 78 C, with hysteresis; hands control back to automatic on any error or stop; logs CSV. Simulation passed.
+- Power limit range on this card: 90 W minimum, 180 W default, 216 W maximum. Lowering it is parked: Boss will only try it if temperatures cause problems in normal use.
+
 ## Next steps (each reversible, Boss approves)
 
-1. Give Mimir more RAM (needs a full Stop and Start by Boss; the API token can set the amount) and/or limit the prompt cache, then rerun the soak only; compare outputs and speed at the end.
-2. Look at cooling (case airflow or fan curve) because sustained load reaches 86 to 88 C; check whether the fan is allowed to ramp.
+1. Install and test the fan service on Mimir.
+2. Boss cleans (and possibly repastes) the card at the weekend; then repeat a short cool-start A/B (profile ON) to see the temperature change.
 3. Investigate the 35.7 against 33.6 baseline difference (toggle persistence mode and rerun one OFF block).
 4. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
-5. Make Ollama a service so the setup survives a reboot.
+5. Make Ollama a service so the setup survives a reboot (also consider limiting its prompt cache).
 6. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
