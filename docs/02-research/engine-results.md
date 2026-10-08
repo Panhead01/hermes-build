@@ -258,10 +258,22 @@ Same safety stops as before (abort above 92 C, on any new Xid error, or if nvidi
 
 The fan curve lowers peak temperature by 8 C (to 82 C, just under the card's 83 C target) and gains about 0.4% in speed; it is worth keeping on for heat, not for speed. Caveat: the second soak was 20 minutes against 60, though the first soak had already reached 87 C within about 3 minutes.
 
+## Ollama as a service on Mimir (8 October 2026)
+
+Ollama now runs as the systemd service `ollama` (unit `/etc/systemd/system/ollama.service`, runs as user `agent`, binary `/home/agent/ollama/bin/ollama`, restarts on failure). Settings:
+
+| Setting | Value | Why |
+|---|---|---|
+| `OLLAMA_HOST` | `127.0.0.1:11434` | reachable from Mimir only, not the LAN |
+| `OLLAMA_KEEP_ALIVE` | `30m` | keeps the model loaded between turns (can be raised for an always-on agent) |
+| `LLAMA_ARG_CACHE_RAM` | `2048` | caps the llama.cpp prompt cache at 2 GiB (default 8192 MiB, which grew until the 4 GB guest ran out of memory); the log confirms `limits: 2048.000 MiB` |
+
+Reboot test (in-guest restart): after it, `ollama`, `gpu-fan` and `nvidia-persistenced` were all active without any action, persistence mode was on, the settings file was in place, and a generation ran at P0 with the memory clock at 5005 MHz at 38.51 tok/s (CUDA backend).
+
 ## Next steps (each reversible, Boss approves)
 
 1. Boss cleans (and possibly repastes) the card at the weekend; then a short cool-start A/B (profile ON, fan service ON) to see the temperature change.
-2. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
-3. Make Ollama a service so the setup survives a reboot (also consider limiting its prompt cache).
+2. Install Hermes and Hermes Desktop against this Ollama service (vet the code first), then Hindsight.
+3. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
 4. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
 5. Unexplained: the earlier 35.7 tok/s plain-CUDA baseline against 33.6 now (persistence mode ruled out).
