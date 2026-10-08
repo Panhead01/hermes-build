@@ -1,4 +1,58 @@
-# Engine results: qwen3:8b on the GTX 1080 (trial guest 212)
+# Engine results: qwen3:8b on the GTX 1080
+
+## Results at a glance (all runs, 7 to 8 October 2026)
+
+Model for every run: `qwen3:8b` (Q4, 5.6 GB), Ollama v0.40.0, same script and prompts (six prompts of about 200 words, 300-token cap, thinking off, 4096 context), card GeForce GTX 1080 (Gigabyte GV-N1080TTOC-8GD, 8 GB, 180 W limit) passed through to a VM. Generation = tokens written per second; prompt = tokens read per second. Every row is OBSERVED. "Set" = six timed runs after one discarded warm-up. Details of each row are in the sections below.
+
+### A. Single sets of six runs
+
+| # | Guest and driver | Backend | Settings | Card state at start | Generation tok/s (mean, range) | Prompt tok/s (mean) | Memory clock | Notes |
+|---|---|---|---|---|---|---|---|---|
+| A1 | Debian 13.7, driver 550.163.01 | Vulkan (Ollama's fallback, CUDA refused: driver too old) | stock fan, persistence off | warm | 39.60 (39.34 to 39.83) | 162 | not measured | VRAM 5332 MiB; guest later destroyed |
+| A2 | Ubuntu 26.04.1, driver 580.178.04 | CUDA | no profile file, persistence off | warm | 35.76 (35.59 to 35.85) | 437 | 4513 MHz, P2 | first CUDA set |
+| A3 | same, after a guest restart | CUDA | no profile file, persistence off | warm | 35.66 (35.54 to 35.78) | 437 | 4513 MHz, P2 | repeat of A2 |
+| A4 | same | Vulkan (forced) | persistence on | warm | 40.87 (40.70 to 40.96) | 162 | 5005 MHz, P0 | control: same machine, other backend |
+| A5 | same | CUDA | profile file ON, persistence on | warm | 38.37 (38.13 to 38.59) | 437 | 5005 MHz, P0 | first test of the fix |
+| A6 | same | CUDA | profile file OFF (control), persistence on | warm (just after A5) | 33.13 (32.77 to 33.50) | 419 | 4513 MHz, P2 | run on a hot card, reads low |
+
+### B. Cool-start run: six mirrored blocks (each starts at 36 to 37 C, idle-stable for 30 minutes first)
+
+| Block | Condition | Generation tok/s | Prompt tok/s | Memory clock | End temp |
+|---|---|---|---|---|---|
+| B1 | CUDA, profile ON | 38.48 | 440 | 5005 MHz, P0 | 68 C |
+| B2 | CUDA, profile OFF | 33.65 | 440 | 4513 MHz, P2 | 71 C |
+| B3 | Vulkan | 40.91 | 161 | 5005 MHz, P0 | 67 C |
+| B4 | Vulkan | 40.90 | 162 | 5005 MHz, P0 | 67 C |
+| B5 | CUDA, profile OFF | 33.61 | 435 | 4513 MHz, P2 | 71 C |
+| B6 | CUDA, profile ON | 38.52 | 443 | 5005 MHz, P0 | 67 C |
+
+Means: CUDA with profile 38.50, CUDA without 33.63, Vulkan 40.91 tok/s. The profile is worth about +14.5% over plain CUDA; Vulkan generates about 6% faster than CUDA with the profile and reads prompts about 2.7 times slower.
+
+### C. Extra controlled tests
+
+| # | Test | Result |
+|---|---|---|
+| C1 | Persistence mode OFF baseline (CUDA, profile OFF, cool start, fan service stopped) | 33.64 tok/s generation, 439.7 prompt, 4513 MHz P2: same as persistence ON (33.63), so persistence is not the cause of the earlier 35.7 baseline (still unexplained) |
+| C2 | Integrity: 12 fixed-seed prompts (temperature 0), profile ON against profile OFF | 12 of 12 outputs identical; mean speed 38.15 against 32.97 tok/s; 0 Xid errors |
+| C3 | Fan service under a 130 second load | PASS: took manual control past 56 C, reached 100% fan, peak 82 C, returned to automatic about 120 s after the load |
+
+### D. Soaks (continuous generation, profile ON, memory clock held at 5005 MHz)
+
+| # | Setup | Duration | Generations | Speed first 10 to last 10 | Peak / mean temp | Integrity (12 prompts before and after) | Outcome |
+|---|---|---|---|---|---|---|---|
+| D1 | 4 GB RAM, stock fan | about 7 min | about 45 | steady 37.7 | 88 C | not reached | stopped by the Linux out-of-memory killer (RAM shortage, 0 Xid) |
+| D2 | 12 GB RAM, stock fan (fan at 87% at 88 C) | 60 min | 517 | 38.07 to 37.74 | 90 C / about 86 C | 12 of 12 identical | completed; 0 Xid, 0 OOM; memory use levelled off near 9.6 GB |
+| D3 | 12 GB RAM, fan service on | 20 min | 175 | 38.27 to 37.89 | 82 C / 80 C | 12 of 12 identical | completed; SM clock mean 1671 MHz against about 1640 in D2 |
+
+### E. Hardware limits read from the card
+
+Power limit 90 W minimum, 180 W default, 216 W maximum; card's thermal target 83 C, slowdown 96 C, shutdown 99 C; memory clock 5005 MHz at P0, 4513 MHz at P2 under CUDA; fan range 24 to 100% (one fan, under NVML control in the guest).
+
+### Bottom line
+
+- Best all-round setting for agent work: **CUDA with the CudaNoStablePerfLimit profile file and the fan service**: about 38.4 to 38.5 tok/s generation, about 440 tok/s prompt reading, peak 82 C, 12 of 12 answers identical over a one-hour and a 20-minute soak.
+- Vulkan writes about 6% faster but reads prompts about 2.7 times slower; it only wins on very short prompts with long answers.
+- Open: the earlier plain-CUDA baseline of 35.7 tok/s (A2, A3) against 33.6 in the controlled runs is unexplained (persistence mode ruled out).
 
 Measured 7 October 2026 on trial guest `agent-trial` (VM 212). This is the engine-only step from `trial-plan.md`: driver, Ollama, one model, speed and fit.
 
