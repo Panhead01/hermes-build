@@ -184,11 +184,30 @@ Conclusion (CONFIRMED for this one-hour run): CUDA with the CudaNoStablePerfLimi
 - Fan control works headless in the guest through NVML as root (CONFIRMED by test: set 35% took effect and was restored to automatic; range 24 to 100%). A fan-curve and monitoring service is prepared (`gpu-fan-curve.py`): automatic below 55 C, then 50% at 55 C, 65% at 65 C, 80% at 72 C, 100% at 78 C, with hysteresis; hands control back to automatic on any error or stop; logs CSV. Simulation passed.
 - Power limit range on this card: 90 W minimum, 180 W default, 216 W maximum. Lowering it is parked: Boss will only try it if temperatures cause problems in normal use.
 
+## Unattended test queue (script `gpu-queue.py` on Mimir, 7 to 8 October 2026)
+
+Same safety stops as before (abort above 92 C, on any new Xid error, or if nvidia-smi stops answering) and the same cool-start rule for T2 and T3. Nothing aborted; Xid errors 0, out-of-memory kills 0. Final state restored: settings file in place, persistence mode on, fan service running, Ollama stopped.
+
+**T1, fan service under load: PASS.** Installed as systemd service `gpu-fan` (`/opt/gpu-fan/gpu-fan-curve.py`, log `/var/log/gpu-fan/gpu-fan.csv`). In a 130 second load (19 generations) it took manual control past 56 C, reached 100% fan, peak 82 C, and handed control back to automatic about 120 seconds after the load ended.
+
+**T2, persistence mode OFF baseline (CUDA, profile OFF, fan service stopped, cool start 37 C):** 33.64 tok/s generation, 439.7 tok/s prompt, P2 and 4513 MHz. Persistence ON gave 33.63 in the earlier cool-start run. **Persistence mode is not the cause of the earlier 35.7 baseline.** That discrepancy is still unexplained.
+
+**T3, 20-minute soak with the fan service (profile ON, cool start):** 175 generations, first 10 at 38.27 tok/s, last 10 at 37.89, 12 of 12 fixed-seed answers identical before and after.
+
+| | One-hour soak, stock fan | 20-minute soak, fan service |
+|---|---|---|
+| Peak temperature | 90 C | 82 C |
+| Mean temperature | about 86 C | 80 C |
+| SM clock (mean) | about 1640 MHz | 1671 MHz |
+| Generation, last 10 | 37.74 tok/s | 37.89 tok/s |
+| Answers identical | yes (12 of 12) | yes (12 of 12) |
+
+The fan curve lowers peak temperature by 8 C (to 82 C, just under the card's 83 C target) and gains about 0.4% in speed; it is worth keeping on for heat, not for speed. Caveat: the second soak was 20 minutes against 60, though the first soak had already reached 87 C within about 3 minutes.
+
 ## Next steps (each reversible, Boss approves)
 
-1. Install and test the fan service on Mimir.
-2. Boss cleans (and possibly repastes) the card at the weekend; then repeat a short cool-start A/B (profile ON) to see the temperature change.
-3. Investigate the 35.7 against 33.6 baseline difference (toggle persistence mode and rerun one OFF block).
-4. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
-5. Make Ollama a service so the setup survives a reboot (also consider limiting its prompt cache).
-6. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
+1. Boss cleans (and possibly repastes) the card at the weekend; then a short cool-start A/B (profile ON, fan service ON) to see the temperature change.
+2. Rerun CUDA and Vulkan on different driver versions only if the result still disappoints.
+3. Make Ollama a service so the setup survives a reboot (also consider limiting its prompt cache).
+4. Turn Mimir into a cloud-init template (card removed, start-at-boot off) once the engine settles.
+5. Unexplained: the earlier 35.7 tok/s plain-CUDA baseline against 33.6 now (persistence mode ruled out).
